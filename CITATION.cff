@@ -1,0 +1,27 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it using the metadata below."
+title: "A Reproducible Runtime Performance Benchmark Across Ruby, Go, Python, and Node.js (via Background Job Execution)"
+type: software
+authors:
+  - family-names: "Potrakhov"
+    given-names: "Oleksandr"
+repository-code: "https://github.com/a11ejandro/language-performance-benchmark-harness"
+url: "https://github.com/a11ejandro/language-performance-benchmark-harness"
+license: MIT
+keywords:
+  - benchmark
+  - runtime-performance
+  - ruby
+  - go
+  - python
+  - nodejs
+  - background-jobs
+  - reproducibility
+preferred-citation:
+  type: report
+  title: "A Reproducible Runtime Performance Benchmark Across Ruby, Go, Python, and Node.js (via Background Job Execution)"
+  authors:
+    - family-names: "Potrakhov"
+      given-names: "Oleksandr"
+  year: 2026
+  url: "https://github.com/a11ejandro/language-performance-benchmark-harness"

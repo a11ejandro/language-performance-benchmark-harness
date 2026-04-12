@@ -1,0 +1,36 @@
+<h1>New Task</h1>
+
+<%= form_with(model: @task, local: true) do |form| %>
+  <% if @task.errors.any? %>
+    <div id="error_explanation">
+      <h2><%= pluralize(@task.errors.count, "error") %> prohibited this task from being saved:</h2>
+      <ul>
+        <% @task.errors.full_messages.each do |message| %>
+          <li><%= message %></li>
+        <% end %>
+      </ul>
+    </div>
+  <% end %>
+
+  <div>
+    <%= form.label :name %>
+    <%= form.text_field :name %>
+  </div>
+  <div>
+    <%= form.label :page %>
+    <%= form.number_field :page, value: @task.page || 1 %>
+  </div>
+  <div>
+    <%= form.label :per_page %>
+    <%= form.number_field :per_page, value: @task.per_page || 20 %>
+  </div>
+  <div>
+    <%= form.label :runs %>
+    <%= form.number_field :runs, value: @task.runs || 1 %>
+  </div>
+  <div>
+    <%= form.submit 'Create Task' %>
+  </div>
+<% end %>
+
+<%= link_to 'Back', tasks_path %>

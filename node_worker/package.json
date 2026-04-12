@@ -1,0 +1,20 @@
+{
+  "name": "node_worker",
+  "version": "1.0.0",
+  "description": "Sidekiq-compatible worker implemented in Node.js for the benchmark UI",
+  "type": "module",
+  "main": "worker.js",
+  "scripts": {
+    "start": "node worker.js",
+    "service": "node worker.js --service",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=24.11"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "pg": "^8.11.3",
+    "redis": "^4.6.13"
+  }
+}

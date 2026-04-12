@@ -1,0 +1,16 @@
+<h1>Memory by Page Size</h1>
+
+<%= link_to 'Back to Tasks', tasks_path %>
+
+<div class="actions" style="margin:1rem 0;">
+  <%= link_to 'Download Raw Memory CSV (All Selected Tasks)', memory_selected_csv_path, class: 'button' %>
+</div>
+
+<div class="box-chart">
+  <div class="box">
+    <div data-memories='<%= @series_by_handler.to_json %>'></div>
+  </div>
+</div>
+
+<%= javascript_import_module_tag 'memory_chart' %>
+

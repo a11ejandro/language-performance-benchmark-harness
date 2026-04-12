@@ -1,0 +1,35 @@
+# Root ignore rules for publishing `rails_8/` as the artifact repository.
+# Policy: ignore all top-level files by default (to avoid accidental publication of internal drafts),
+# and explicitly whitelist the root entrypoints needed for reproducibility.
+
+# Ignore everything at repo root...
+/*
+
+# ...but keep the repo metadata and required entrypoints.
+!/.gitignore
+!/docker-compose.yml
+!/TESTING.md
+!/README.md
+!/LICENSE
+!/CITATION.cff
+
+# Keep the actual project directories trackable.
+!/benchmark_ui/
+!/golang_worker/
+!/node_worker/
+!/python_worker/
+
+# Editor / OS junk (applies anywhere)
+.DS_Store
+.vscode/
+.ruby-lsp/
+
+# Python
+__pycache__/
+*.pyc
+
+# Node
+node_modules/
+
+# Go
+*.test

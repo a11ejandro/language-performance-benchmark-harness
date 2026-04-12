@@ -1,0 +1,35 @@
+<h1>Tasks</h1>
+
+<div style="display:flex; gap: 12px; align-items:center;">
+  <%= link_to 'New Task', new_task_path, class: 'btn btn-primary' %>
+  <%= link_to 'Durations', durations_path, class: 'btn' %>
+  <%= link_to 'Memory', memory_path, class: 'btn' %>
+  <div style="flex:1"></div>
+</div>
+
+<table>
+  <thead>
+    <tr>
+      <th>Selected</th>
+      <th>ID</th>
+      <th>Name</th>
+      <th>Page</th>
+      <th>Per Page</th>
+      <th>Runs</th>
+      <th>Created At</th>
+    </tr>
+  </thead>
+  <tbody>
+    <% @tasks.each do |task| %>
+      <tr>
+        <td><%= render 'selected_cell', task: task %></td>
+        <td><%= task.id %></td>
+        <td><%= link_to task.name, task_path(task) %></td>
+        <td><%= task.page %></td>
+        <td><%= task.per_page %></td>
+        <td><%= task.runs %></td>
+        <td><%= task.created_at.strftime('%Y-%m-%d %H:%M:%S') %></td>
+      </tr>
+    <% end %>
+  </tbody>
+</table>

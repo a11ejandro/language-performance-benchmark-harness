@@ -1,0 +1,5 @@
+<%= turbo_frame_tag dom_id(task, :selected), style: 'display:inline' do %>
+  <%= form_with model: task, url: selected_task_path(task), method: :patch, data: { turbo: true }, html: { style: 'display:inline;margin:0;padding:0' } do |f| %>
+    <%= f.check_box :selected, checked: task.selected, onclick: 'this.form.requestSubmit()', style: 'margin:0;padding:0' %>
+  <% end %>
+<% end %>
