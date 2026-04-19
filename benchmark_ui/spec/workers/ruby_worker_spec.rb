@@ -18,7 +18,8 @@ RSpec.describe RubyWorker, type: :worker do
 
   before do
     # Deterministic timing and memory (keep real get_page_values behavior)
-    allow(Process).to receive(:clock_gettime).with(Process::CLOCK_MONOTONIC).and_return(1.0, 1.123)
+    allow(worker).to receive(:monotonic_time).and_return(1.0, 1.123)
+
     allow(worker).to receive(:measure_peak_resident_memory) do |&blk|
       measurement = blk.call
       [measurement, 2048.0]

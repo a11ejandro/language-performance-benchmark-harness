@@ -13,9 +13,9 @@ class RubyWorker
     values = get_page_values(page, page_size)
 
     measurement, peak_memory = measure_peak_resident_memory do
-      start = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      start = monotonic_time
       stats = CalculateStatistics.call(values)
-      duration = Process.clock_gettime(Process::CLOCK_MONOTONIC) - start
+      duration = monotonic_time - start
       [stats, duration]
     end
 
@@ -30,6 +30,10 @@ class RubyWorker
     offset = per_page * ((page = page.to_i - 1) < 0 ? 0 : page)
 
     Sample.limit(per_page).offset(offset).pluck(:value)
+  end
+
+  def monotonic_time
+    Process.clock_gettime(Process::CLOCK_MONOTONIC)
   end
 
   SAMPLING_INTERVAL = 0.01
