@@ -6,6 +6,7 @@ require 'uri'
 
 class PythonWorkerClient
   DEFAULT_ENDPOINT = 'http://127.0.0.1:5000/enqueue'
+  ENV_KEYS = %w[PYTHON_WORKER_URL PYTHON_WORKER_API].freeze
 
   class Error < StandardError; end
 
@@ -38,7 +39,12 @@ class PythonWorkerClient
     end
 
     def endpoint
-      ENV.fetch('PYTHON_WORKER_API', DEFAULT_ENDPOINT)
+      ENV_KEYS.each do |key|
+        value = ENV[key]
+        return value if value && !value.empty?
+      end
+
+      DEFAULT_ENDPOINT
     end
 
     def parse_task_id(body)

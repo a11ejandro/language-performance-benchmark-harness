@@ -121,6 +121,7 @@ services:
       RAILS_LOG_TO_STDOUT: "true"
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/benchmark_development
       REDIS_URL: redis://redis:6379/0
+      PYTHON_WORKER_API: http://python_worker_api:5000/enqueue
       PYTHON_WORKER_URL: http://python_worker_api:5000/enqueue
     volumes:
       # Persist generated CSVs/figures back into the repo when running article:* tasks.
@@ -142,6 +143,7 @@ services:
       RAILS_LOG_TO_STDOUT: "true"
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/benchmark_development
       REDIS_URL: redis://redis:6379/0
+      PYTHON_WORKER_API: http://python_worker_api:5000/enqueue
       PYTHON_WORKER_URL: http://python_worker_api:5000/enqueue
     volumes:
       - ./benchmark_ui/docs:/rails/docs
