@@ -3,7 +3,7 @@ require 'rails_helper'
 RSpec.describe 'Tasks', type: :request do
   describe 'POST /tasks/:id/recalculate_statistics' do
     it 'recalculates statistics for completed handlers' do
-      task = Task.create!(name: 'Benchmark', page: 'test', per_page: 10, runs: 1)
+      task = Task.create!(name: 'Benchmark', page: 1, per_page: 10, runs: 1)
       handler = Handler.create!(task:, handler_type: 'ruby')
       test_run = TestRun.create!(handler:, consequent_number: 0)
       TestResult.create!(test_run:, duration: 1.5, memory: 256.0)
@@ -14,8 +14,11 @@ RSpec.describe 'Tasks', type: :request do
 
       expect(response).to redirect_to(task_path(task))
 
+      follow_redirect!
+      expect(response.body).to include('Recalculated statistics for 1 handler.')
+
       duration_stats = handler.reload.duration_statistics
-      memory_stats = handler.memory_statistics
+      memory_stats = handler.reload.memory_statistics
 
       expect(duration_stats.mean).to eq(1.5)
       expect(memory_stats.mean).to eq(256.0)
