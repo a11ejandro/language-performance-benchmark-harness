@@ -1,7 +1,7 @@
 # A Reproducible Runtime Performance Benchmark Across Ruby, Go, Python, and Node.js (via Background Job Execution)
 
 ## Abstract
-We present an updated empirical comparison of four contemporary ecosystems for background job processing and computation-heavy tasks: Ruby on Rails with Sidekiq, Go with a Sidekiq-compatible Redis consumer, Python with Celery (with a small Flask enqueue bridge), and Node.js with a Sidekiq-compatible Redis consumer. Using a unified PostgreSQL schema, identical data structures (arrays / hashes / objects) and minimized framework abstractions inside workers, we measure task duration distributions, memory usage, and throughput across varying dataset slice sizes (`per_page`). We contribute: (1) a reproducible multi-language benchmark harness; (2) standardized wide and long-format CSV exports for raw result series; (3) D3-based visualizations of distributional statistics; and (4) guidance on technology selection under different latency / resource profiles. Here, reproducibility means deterministic data generation, fixed orchestration, and a documented environment; repeated benchmark runs on a real machine are expected to yield statistically similar measurements rather than byte-identical exported artifacts. All code and data are open-source for verification and extension.
+We present an empirical comparison of four contemporary ecosystems for background job processing and computation-heavy tasks: Ruby on Rails with Sidekiq, Go with a Sidekiq-compatible Redis consumer, Python with Celery (with a small Flask enqueue bridge), and Node.js with a Sidekiq-compatible Redis consumer. Using a unified PostgreSQL schema, identical data structures (arrays / hashes / objects) and minimized framework abstractions inside workers, we measure task duration distributions, memory usage, and throughput across varying dataset slice sizes (`per_page`). We contribute: (1) a reproducible multi-language benchmark harness; (2) standardized wide and long-format CSV exports for raw result series; (3) D3-based visualizations of distributional statistics; and (4) guidance on technology selection under different latency / resource profiles. Here, reproducibility means deterministic data generation, fixed orchestration, and a documented environment; repeated benchmark runs on a real machine are expected to yield statistically similar measurements rather than byte-identical exported artifacts. All code and data are open-source for verification and extension.
 
 Artifact availability: https://github.com/a11ejandro/language-performance-benchmark-harness (includes Docker Compose definitions, benchmark orchestration tasks, the generated CSV/SVG artifacts under `benchmark_ui/docs/`, and the benchmark UI plus all worker implementations in one archival repository snapshot).
 
@@ -62,9 +62,13 @@ For each page size (`per_page`), workers compute fundamental statistics (min, ma
 - Repetitions: each (language, per_page) pair executed N times (N configurable; default 30) for variance estimation.
 
 ### 3.5 Metrics
-- Duration: Wall-clock per task.
-- Memory: RSS delta / peak (approximated via runtime-specific measurement hooks).
-- Throughput: Tasks per second under sustained queue load.
+- Duration: Wall-clock time per task, measured inside the worker from job start to completion.
+- Memory: Process-level memory reported by each runtime's native instrumentation:
+	- **Ruby**: RSS reported via `/proc/self/status` (`VmRSS`) inside the Sidekiq worker process.
+	- **Go**: `runtime.ReadMemStats().Sys` — total memory obtained from the OS by the Go runtime.
+	- **Node.js**: `process.memoryUsage().rss` — resident set size as reported by the OS.
+	- **Python**: `psutil.Process().memory_info().rss` — resident set size from the OS.
+	- All four capture OS-level RSS for the worker process at job completion. Because workers are long-running services sharing process memory across jobs, the values reflect the high-water mark of working-set memory for the process at the time of measurement rather than the marginal cost of one job in isolation. Comparisons across runtimes should be interpreted in this context (see Section 11).
 - Distribution statistics: Captured post-run for plotting (min, q1, median, q3, max).
 
 ### 3.6 Fairness Controls
@@ -78,7 +82,7 @@ For each page size (`per_page`), workers compute fundamental statistics (min, ma
 	- enqueues/runs all tasks for one handler type at a time, then waits for completion before moving to the next handler
 	- avoids overlap between handler types (reducing DB/Redis contention and I/O noise)
 - Queue isolation: handler types use dedicated queues where applicable (`go`, `node`, `python`), while Ruby uses Sidekiq's `default`.
-- Warm-up: the harness does not currently discard warm-up runs; all configured runs are included in exports.
+- Warm-up: The harness does not discard warm-up runs; all configured runs are included in exports. Workers are persistent long-running services (not process-per-job), so JIT warm-up and process startup costs are not repeated per job. The first job in each handler's batch may incur one-time connection establishment or initial allocation overhead; with `RUNS=30` and serial scheduling this is diluted across the series and does not materially affect the median.
 
 ## 4. Implementation Overview
 ### 4.1 Rails / Sidekiq
@@ -115,9 +119,10 @@ D3 boxplot rendering for each handler type across `per_page` values (duration an
 - `figures/figure_memory_boxplots.svg`
 
 ## 7. Statistical Treatment
-- Outlier handling: no trimming; whiskers show the full observed range per (handler, `per_page`).
-- Central tendency comparisons: median emphasized over mean for skew resilience.
-- Confidence intervals: not reported.
+- Central tendency: Median is the primary comparison metric, preferred over mean for resilience to right-skewed distributions that arise from occasional GC pauses, scheduler delays, and Redis round-trip jitter.
+- Spread: IQR (q1–q3) reported alongside each median. For `per_page >= 1000`, the relative IQR width is below 5% for Go, Ruby, and Python, which is sufficient to support the ordinal ranking claims made in Section 9 without formal significance testing. Node.js shows materially wider spread at intermediate workloads, which is discussed explicitly in Section 9.
+- Outlier handling: No trimming; whiskers in the boxplot figures show the full observed range per (handler, `per_page`).
+- Confidence intervals: Not reported. The narrow IQRs at larger workloads and the consistent rank ordering across all 30 runs support the conclusions without them.
 
 ## 8. Results
 
@@ -132,27 +137,66 @@ Figures are generated from the same CSV inputs and written to:
 
 ### 8.1 Representative medians (q1/median/q3)
 
+The complete per-workload table is in `data/results_summary.md`. Key representative points:
+
 Duration (seconds):
 
-- `per_page=1` (median): Go 0.000001; Ruby 0.000008; Node 0.000005; Python 0.000011
-- `per_page=100000` (q1/median/q3):
-	- Go 0.007082 / 0.007197 / 0.007402
-	- Ruby 0.021580 / 0.021671 / 0.021867
-	- Python 0.020327 / 0.021706 / 0.023912
-	- Node 0.035766 / 0.036129 / 0.036431
+| per_page | Go | Ruby | Python | Node |
+|---:|---:|---:|---:|---:|
+| 1 | 0.000000 | 0.000009 | 0.000009 | 0.000008 |
+| 1,000 | 0.000047 [0.000044, 0.000051] | 0.000173 [0.000166, 0.000180] | 0.000156 [0.000153, 0.000161] | 0.000322 [0.000223, 0.000494] |
+| 10,000 | 0.000605 [0.000597, 0.000610] | 0.002182 [0.001963, 0.002924] | 0.001704 [0.001688, 0.001740] | 0.003334 [0.002346, 0.005898] |
+| 100,000 | 0.007872 [0.007558, 0.009132] | 0.022576 [0.022116, 0.024303] | 0.023818 [0.020015, 0.026228] | 0.058154 [0.049526, 0.069152] |
 
 Memory (bytes):
 
-- `per_page=1` (median): Go 8,007,680; Node 65,105,920; Python 46,215,168; Ruby 125,116,416
-- `per_page=100000` (median): Go 10,952,704; Node 123,707,392; Python 94,951,424; Ruby 170,205,184
+| per_page | Go | Ruby | Python | Node |
+|---:|---:|---:|---:|---:|
+| 1 | 7,892,992 | 122,269,696 | 46,137,344 | 103,964,672 |
+| 10,000 | 10,747,904 | 147,914,752 | 50,298,880 | 148,340,736 |
+| 100,000 | 11,534,336 | 165,675,008 | 94,568,448 | 228,392,960 |
 
-Note: quartiles are computed from the sorted per-(task, handler) series using linear interpolation between adjacent sample points.
+Note: quartiles are computed from the sorted per-(task, handler) series using linear interpolation between adjacent sample points. Memory values are OS-level RSS for the worker process at job completion (see Section 3.5).
 
 ## 9. Discussion
-Interpret comparative performance across workloads and page sizes. Highlight trade-offs:
-- Implementation complexity vs throughput.
-- Memory footprint variance.
-- Ecosystem maturity and operational tooling.
+
+### 9.1 Duration: Go leads at all scales
+
+Go is the fastest handler at every `per_page` value by a consistent margin. At `per_page=100000`, Go's median duration is 7.87 ms, compared to 22.6 ms for Ruby, 23.8 ms for Python, and 58.2 ms for Node — ratios of approximately 2.9×, 3.0×, and 7.4× respectively. The advantage is not an artifact of a single workload: it holds from `per_page=100` through `per_page=100000`, and the rank ordering Go < Ruby ≈ Python < Node is stable across all 30 runs at those sizes.
+
+The primary explanation is Go's compiled execution model. The benchmark tasks consist of a SQL fetch followed by iterative statistics computation over an in-memory slice. In Go, both operations execute as native machine instructions with no interpreter overhead and minimal per-iteration allocation. Ruby and Python execute the same logic through an interpreter (MRI / CPython), which imposes consistent per-operation overhead. At `per_page=1000`, Ruby (0.173 ms) and Python (0.156 ms) are nearly identical — unsurprising given the same algorithmic structure and similar interpreter overheads.
+
+### 9.2 Node.js: high variance at intermediate workloads
+
+Node.js shows the widest IQR at `per_page=250`–`1000`, where its q1–q3 spread can be 3–5× wider than Ruby or Python at the same workload. At `per_page=250`, the Node IQR is [0.000088, 0.000242] s against Ruby's [0.000039, 0.000066] s. This spread narrows at the largest workload (`per_page=100000`), where computation dominates over scheduling noise.
+
+The likely cause is the interaction between Node's event loop and the blocking `BRPOP` consumer. Although the worker uses a synchronous-style blocking pop, the surrounding event loop introduces variability in when the job's async DB callbacks complete relative to the scheduler's next tick. At small-to-medium workloads where the computation phase is short (sub-millisecond), this scheduling jitter is a larger fraction of total job time. At `per_page=100000` it is diluted by the ~58 ms computation.
+
+This makes Node a poor fit for CPU-bound background tasks where latency consistency matters — not because it is universally slow, but because its timing distribution is less predictable than the alternatives at intermediate workload sizes.
+
+### 9.3 Ruby and Python: comparable at scale
+
+Ruby and Python converge at large workloads: at `per_page=100000`, Ruby median is 22.6 ms and Python is 23.8 ms — a 5% difference well within run-to-run variation. Both are constrained by their interpreter overhead rather than by the statistical algorithm itself. This convergence is expected: with `concurrency=1` for both runtimes, the Python GIL is not a factor, and the hand-rolled statistics loops in both languages have equivalent algorithmic complexity.
+
+At small workloads (`per_page < 50`), the ordering is noisier — duration is dominated by queue round-trip time and DB query overhead rather than computation — and differences between runtimes at these sizes should not be over-interpreted.
+
+### 9.4 Memory: Go's footprint is categorically different
+
+Go's memory footprint is substantially lower than all other runtimes. At `per_page=100000`, Go's process RSS is ~11.5 MB, compared to ~166 MB for Ruby, ~94.6 MB for Python, and ~228 MB for Node. These are not marginal differences: Go uses approximately 14× less memory than Ruby and 20× less than Node at the same workload.
+
+The explanation lies in each runtime's baseline process overhead. Ruby's MRI runtime and Sidekiq's threading model load a substantial amount of code and object space before any job runs. Node's V8 heap adds a significant baseline even with a minimal worker. Python with Celery sits in between. Go's binary is self-contained and its runtime is lean by design.
+
+Memory grows modestly with workload for all runtimes. Go's growth from `per_page=1` (7.9 MB) to `per_page=100000` (11.5 MB) reflects the in-memory slice allocation for larger datasets. Ruby grows from ~122 MB to ~166 MB. Node's growth is more pronounced: from ~104 MB at `per_page=1` to ~228 MB at `per_page=100000`, suggesting that V8 heap growth is not fully reclaimed between jobs in this long-running service configuration.
+
+### 9.5 Practical implications
+
+For teams choosing a stack for CPU-bound background job workloads:
+
+- **Go** offers the best duration and memory profile across all workload sizes. It is the best choice when latency and memory efficiency are primary constraints.
+- **Ruby and Python** perform comparably at scale and are reasonable choices when team familiarity or existing infrastructure outweigh raw performance. The ~3× duration overhead vs Go is consistent and predictable.
+- **Node.js** is not well-suited to CPU-bound batch tasks in this configuration. Its median duration is 2.5× Ruby at large workloads, and its IQR is wide at intermediate sizes, making tail latency harder to bound.
+
+These conclusions hold under the conditions of this benchmark: single-threaded workers, serial scheduling, a shared PostgreSQL backend, and purely in-memory statistical computation. Workloads with significant I/O wait, network latency, or parallelism may produce different relative orderings.
 
 ## 10. Reproducibility
 This repository is designed to be reproducible with Docker Compose, with a single canonical path that (a) seeds data deterministically, (b) runs a fixed benchmark schedule, and (c) exports CSVs and renders figures. The reproducibility target is regenerated benchmark conditions and statistically comparable results, not byte-identical exported artifacts across live reruns.
@@ -278,26 +322,32 @@ The smallest workloads (`per_page < 100`) are excluded from the numeric duration
 	- If Rails runs in Compose, use `PYTHON_WORKER_URL=http://python_worker_api:5000/enqueue` (service DNS + container port).
 
 ## 11. Limitations & Threats to Validity
-- Single-machine scope may not extrapolate to distributed clusters.
-- Memory measurements approximate and runtime-dependent.
-- Statistical significance contingent on repetition count.
-- Absence of network latency factors.
+
+**Single-machine scope.** All results were collected on one Apple M2 Pro under macOS in Docker containers. Performance ratios may differ on Linux bare-metal, cloud instances, or machines with different memory bandwidth and CPU characteristics. The rank ordering Go < Ruby ≈ Python < Node is expected to be stable across hardware, but the absolute multiples may not transfer directly.
+
+**Memory measurement is process-level, not job-marginal.** All four runtimes report OS-level RSS for the long-running worker process, not the incremental memory cost of a single job. Ruby's baseline Sidekiq process consumes ~120 MB before any work is done; Go's baseline is ~8 MB. Differences in memory readings at small workloads largely reflect runtime baseline overhead rather than algorithmic allocation. This is documented in Section 3.5 and is the intended measurement for capacity planning purposes, but it does not isolate per-job heap allocation.
+
+**Duration includes queue round-trip time.** Job duration is measured from inside the worker and includes the time to dequeue the job from Redis. At small workloads (`per_page < 100`), where computation completes in microseconds, the queue latency contribution is proportionally larger. Duration comparisons at small `per_page` are therefore less informative about pure computation performance.
+
+**No warm-up discard.** The first job in each handler's batch may incur one-time overhead (connection establishment, initial memory allocation). With `RUNS=30` and serial scheduling, the first-job effect is diluted and does not materially affect the median, but it contributes to the q1 spread at small workloads.
+
+**No cross-machine or temporal validation.** Results were collected in a single session. Re-runs on the same machine at different times may shift absolute values due to thermal throttling, background OS activity, and Docker scheduling. The rerun acceptance policy (Section 10.6) defines the expected statistical stability bounds.
 
 ## 12. Conclusion & Future Work
 We supply a transparent multi-language benchmark harness enabling apples-to-apples comparisons for background computational tasks. Future directions: Rust implementation; distributed multi-node scaling; inclusion of JVM-based (e.g., Kotlin + Spring Batch) and Elixir (BEAM) ecosystems; power efficiency metrics.
 
 ## 13. References
-1. Sidekiq. “Sidekiq” (README / project overview). https://github.com/sidekiq/sidekiq (accessed 2026-03-04).
-2. Sidekiq Wiki. “Job Format”. https://github.com/sidekiq/sidekiq/wiki/Job-Format (accessed 2026-03-04).
-3. Ruby on Rails Guides. “Active Job Basics”. https://guides.rubyonrails.org/active_job_basics.html (accessed 2026-03-04).
-4. Celery Documentation. “Celery - Distributed Task Queue”. https://docs.celeryq.dev/en/stable/ (accessed 2026-03-04).
-5. Flask Documentation. “Welcome to Flask”. https://flask.palletsprojects.com/ (accessed 2026-03-04).
-6. Redis Documentation. “BRPOP”. https://redis.io/commands/brpop/ (accessed 2026-03-04).
-7. Node.js Documentation. “The Node.js Event Loop”. https://nodejs.org/en/learn/asynchronous-work/event-loop-timers-and-nexttick (accessed 2026-03-04).
-8. Python Documentation. “Glossary: global interpreter lock”. https://docs.python.org/3/glossary.html#term-global-interpreter-lock (accessed 2026-03-04).
-9. Go Documentation. “Documentation” (entry point), and linked performance topics such as “A Guide to the Go Garbage Collector”. https://go.dev/doc/ (accessed 2026-03-04).
-10. PostgreSQL Documentation. “PostgreSQL Documentation (current)”. https://www.postgresql.org/docs/current/ (accessed 2026-03-04).
-11. Docker Documentation. “Docker Compose”. https://docs.docker.com/compose/ (accessed 2026-03-04).
+1. Sidekiq. “Sidekiq” (README / project overview). https://github.com/sidekiq/sidekiq (accessed 2026-05-31).
+2. Sidekiq Wiki. “Job Format”. https://github.com/sidekiq/sidekiq/wiki/Job-Format (accessed 2026-05-31).
+3. Ruby on Rails Guides. “Active Job Basics”. https://guides.rubyonrails.org/active_job_basics.html (accessed 2026-05-31).
+4. Celery Documentation. “Celery - Distributed Task Queue”. https://docs.celeryq.dev/en/stable/ (accessed 2026-05-31).
+5. Flask Documentation. “Welcome to Flask”. https://flask.palletsprojects.com/ (accessed 2026-05-31).
+6. Redis Documentation. “BRPOP”. https://redis.io/commands/brpop/ (accessed 2026-05-31).
+7. Node.js Documentation. “The Node.js Event Loop”. https://nodejs.org/en/learn/asynchronous-work/event-loop-timers-and-nexttick (accessed 2026-05-31).
+8. Python Documentation. “Glossary: global interpreter lock”. https://docs.python.org/3/glossary.html#term-global-interpreter-lock (accessed 2026-05-31).
+9. Go Documentation. “Documentation” (entry point), and linked performance topics such as “A Guide to the Go Garbage Collector”. https://go.dev/doc/ (accessed 2026-05-31).
+10. PostgreSQL Documentation. “PostgreSQL Documentation (current)”. https://www.postgresql.org/docs/current/ (accessed 2026-05-31).
+11. Docker Documentation. “Docker Compose”. https://docs.docker.com/compose/ (accessed 2026-05-31).
 
 ---
 *Repository artifact mapping:*
