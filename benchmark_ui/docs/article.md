@@ -1,7 +1,7 @@
 # A Reproducible Runtime Performance Benchmark Across Ruby, Go, Python, and Node.js (via Background Job Execution)
 
 ## Abstract
-We present an updated empirical comparison of four contemporary ecosystems for background job processing and computation-heavy tasks: Ruby on Rails with Sidekiq, Go with a Sidekiq-compatible Redis consumer, Python with Celery (with a small Flask enqueue bridge), and Node.js with a Sidekiq-compatible Redis consumer. Using a unified PostgreSQL schema, identical data structures (arrays / hashes / objects) and minimized framework abstractions inside workers, we measure task duration distributions, memory usage, and throughput across varying dataset slice sizes (`per_page`). We contribute: (1) a reproducible multi-language benchmark harness; (2) standardized wide and long-format CSV exports for raw result series; (3) D3-based visualizations of distributional statistics; and (4) guidance on technology selection under different latency / resource profiles. All code and data are open-source for verification and extension.
+We present an updated empirical comparison of four contemporary ecosystems for background job processing and computation-heavy tasks: Ruby on Rails with Sidekiq, Go with a Sidekiq-compatible Redis consumer, Python with Celery (with a small Flask enqueue bridge), and Node.js with a Sidekiq-compatible Redis consumer. Using a unified PostgreSQL schema, identical data structures (arrays / hashes / objects) and minimized framework abstractions inside workers, we measure task duration distributions, memory usage, and throughput across varying dataset slice sizes (`per_page`). We contribute: (1) a reproducible multi-language benchmark harness; (2) standardized wide and long-format CSV exports for raw result series; (3) D3-based visualizations of distributional statistics; and (4) guidance on technology selection under different latency / resource profiles. Here, reproducibility means deterministic data generation, fixed orchestration, and a documented environment; repeated benchmark runs on a real machine are expected to yield statistically similar measurements rather than byte-identical exported artifacts. All code and data are open-source for verification and extension.
 
 Artifact availability: https://github.com/a11ejandro/language-performance-benchmark-harness (includes Docker Compose definitions, benchmark orchestration tasks, the generated CSV/SVG artifacts under `benchmark_ui/docs/`, and the benchmark UI plus all worker implementations in one archival repository snapshot).
 
@@ -155,7 +155,7 @@ Interpret comparative performance across workloads and page sizes. Highlight tra
 - Ecosystem maturity and operational tooling.
 
 ## 10. Reproducibility
-This repository is designed to be reproducible with Docker Compose, with a single canonical path that (a) seeds data deterministically, (b) runs a fixed benchmark schedule, and (c) exports CSVs and renders figures.
+This repository is designed to be reproducible with Docker Compose, with a single canonical path that (a) seeds data deterministically, (b) runs a fixed benchmark schedule, and (c) exports CSVs and renders figures. The reproducibility target is regenerated benchmark conditions and statistically comparable results, not byte-identical exported artifacts across live reruns.
 
 For archival publication, the repository is packaged as a single monorepo-style snapshot: `benchmark_ui/`, `golang_worker/`, `node_worker/`, and `python_worker/` are stored as ordinary directories in the artifact rather than as external submodules.
 
@@ -177,9 +177,11 @@ docker compose up -d benchmark_ui sidekiq
 docker compose up -d golang_worker node_worker python_worker python_worker_api
 ```
 
-Run the deterministic benchmark pipeline (seed + create tasks + enqueue runs) inside the Rails container:
+Run the fixed benchmark pipeline (seed + create tasks + enqueue runs) inside the Rails container:
 
 ```bash
+docker compose run --rm benchmark_ui bin/rails db:prepare
+
 docker compose run --rm benchmark_ui bash -lc '
 ROWS=100000 SEED=123 DIST=survey \
 PER_PAGES=1,10,25,50,100,250,500,1000,10000,100000 RUNS=30 PAGE=1 \
@@ -187,6 +189,8 @@ HANDLERS=ruby,go,python,node MODE=enqueue SCHEDULE=serial_by_handler WAIT=true \
 bin/rails article:generate_all
 '
 ```
+
+For a clean clone, `db:prepare` must run before `article:generate_all`; the benchmark command is executed through `bash -lc`, so it does not use the server entrypoint path that auto-prepares the database.
 
 After workers finish, export the canonical long-format CSVs and render the static figures:
 
@@ -202,7 +206,9 @@ Primary outputs (written under `benchmark_ui/docs/`):
 - `figures/figure_duration_boxplots.svg`
 - `figures/figure_memory_boxplots.svg`
 
-Validated end-to-end run commit: `cc53fd63fb0cad0b4d6bb16fe474cb46fb00dd29`.
+These files are archival outputs for a specific validated run. When the pipeline is rerun on a real machine, exact file hashes may change because the measured runtime and memory series vary slightly from run to run.
+
+Validated end-to-end run commit: `72cd7ce608a10d3f6f3ba51464da1469f87a6a18`.
 
 Teardown:
 
@@ -239,7 +245,30 @@ docker compose run --rm python_worker python -m unittest discover -s tests -p 't
 - Record outputs of `ruby -v`, `bundle -v`, `node -v`, `go version`, `python --version`, `psql --version`, `redis-server --version`.
 - Version pinning is captured in `Gemfile`, `go.mod`, `requirements.txt`, and `package.json`.
 
-### 10.5 Notes on containerized services
+### 10.5 Interpreting reruns
+- `SEED` controls deterministic synthetic input generation.
+- `RUNS` repeats the same benchmark condition to estimate runtime and memory distributions.
+- On a real machine, scheduler timing, garbage collection, queue timing, and long-lived worker state will shift some observed measurements.
+- Reproducibility should therefore be assessed by configuration parity and statistical comparability, not exact output hashes.
+
+### 10.6 Rerun acceptance policy
+- Exact-match requirements:
+	- same benchmark commit or release tag
+	- same benchmark parameters: `ROWS`, `SEED`, `DIST`, `PER_PAGES`, `RUNS`, `PAGE`, `HANDLERS`, `MODE`, `SCHEDULE`, `WAIT`
+	- same worker-concurrency constraints: Sidekiq concurrency `1`, Celery concurrency `1`, Celery prefetch multiplier `1`, and one-job Go/Node loops
+	- regeneration of the same canonical output set under `benchmark_ui/docs/`
+- Statistical-match requirements:
+	- for `per_page >= 100`, each handler's duration median should remain within a `0.5x` to `2.0x` band of the archival run median
+	- for `per_page >= 100`, each handler's memory median should remain within a `0.8x` to `1.25x` band of the archival run median
+	- for `per_page = 1000`, `10000`, and `100000`, the qualitative ordering of handler medians should be preserved
+	- no handler should exhibit an order-of-magnitude shift at any workload without an explained code or environment change
+	- rerun reports should capture the machine and environment used
+- Non-goal:
+	- byte-identical CSV, Markdown, and SVG outputs are not required for live reruns on a real machine
+
+The smallest workloads (`per_page < 100`) are excluded from the numeric duration threshold because microsecond-scale timings are dominated more easily by scheduler and timer noise.
+
+### 10.7 Notes on containerized services
 - Compose defaults:
 	- Postgres: `postgres:5432` database `benchmark_development` with `postgres/postgres`
 	- Redis: `redis://redis:6379/0`

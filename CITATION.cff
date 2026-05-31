@@ -7,6 +7,9 @@ authors:
     given-names: "Oleksandr"
 repository-code: "https://github.com/a11ejandro/language-performance-benchmark-harness"
 url: "https://github.com/a11ejandro/language-performance-benchmark-harness"
+version: "v1.0-paper"
+date-released: 2026-04-26
+repository-artifact: "https://github.com/a11ejandro/language-performance-benchmark-harness/releases/tag/v1.0-paper"
 license: MIT
 keywords:
   - benchmark
@@ -24,4 +27,5 @@ preferred-citation:
     - family-names: "Potrakhov"
       given-names: "Oleksandr"
   year: 2026
-  url: "https://github.com/a11ejandro/language-performance-benchmark-harness"
+  version: "v1.0-paper"
+  url: "https://github.com/a11ejandro/language-performance-benchmark-harness/releases/tag/v1.0-paper"
