@@ -23,6 +23,8 @@ Rails.application.routes.draw do
     patch :selected, to: 'tasks#update_selected', on: :member, as: :selected
   end
   
+  resources :comparison_runs, only: [:index, :show]
+
   get '/durations', to: 'durations#index', as: :durations
   get '/durations/selected_csv', to: 'durations#selected_csv', as: :durations_selected_csv
   get '/memory', to: 'memory#index', as: :memory

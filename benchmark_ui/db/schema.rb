@@ -10,9 +10,49 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_09_12_022855) do
+ActiveRecord::Schema[8.0].define(version: 2026_05_07_000200) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
+
+  create_table "comparison_runs", force: :cascade do |t|
+    t.string "baseline_label", null: false
+    t.string "baseline_path", null: false
+    t.string "candidate_label", null: false
+    t.string "candidate_path", null: false
+    t.string "baseline_ref"
+    t.string "candidate_ref"
+    t.string "status", default: "pending", null: false
+    t.boolean "passed"
+    t.integer "failure_count", default: 0, null: false
+    t.jsonb "environment_metadata", default: {}, null: false
+    t.text "notes"
+    t.datetime "started_at"
+    t.datetime "finished_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["created_at"], name: "index_comparison_runs_on_created_at"
+    t.index ["status"], name: "index_comparison_runs_on_status"
+  end
+
+  create_table "comparison_statistics", force: :cascade do |t|
+    t.bigint "comparison_run_id", null: false
+    t.string "metric", null: false
+    t.string "handler_type", null: false
+    t.integer "per_page", null: false
+    t.float "baseline_q1"
+    t.float "baseline_median"
+    t.float "baseline_q3"
+    t.float "candidate_q1"
+    t.float "candidate_median"
+    t.float "candidate_q3"
+    t.float "ratio"
+    t.boolean "passed", default: false, null: false
+    t.text "failure_reason"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["comparison_run_id", "metric", "handler_type", "per_page"], name: "index_comparison_statistics_uniqueness", unique: true
+    t.index ["comparison_run_id"], name: "index_comparison_statistics_on_comparison_run_id"
+  end
 
   create_table "handlers", force: :cascade do |t|
     t.bigint "task_id", null: false
@@ -21,7 +61,7 @@ ActiveRecord::Schema[8.0].define(version: 2025_09_12_022855) do
   end
 
   create_table "samples", force: :cascade do |t|
-    t.float "value"
+    t.float "value", null: false
   end
 
   create_table "statistics", force: :cascade do |t|
@@ -71,6 +111,7 @@ ActiveRecord::Schema[8.0].define(version: 2025_09_12_022855) do
     t.index ["handler_id"], name: "index_test_runs_on_handler_id"
   end
 
+  add_foreign_key "comparison_statistics", "comparison_runs"
   add_foreign_key "handlers", "tasks"
   add_foreign_key "statistics", "handlers"
   add_foreign_key "test_results", "test_runs"

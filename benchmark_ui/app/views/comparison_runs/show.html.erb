@@ -1,0 +1,71 @@
+<h1>Comparison Run #<%= @comparison_run.id %></h1>
+
+<%= link_to '← All Comparisons', comparison_runs_path %>
+
+<table>
+  <tr><th>Baseline</th><td><%= @comparison_run.baseline_label %></td></tr>
+  <tr><th>Baseline Path</th><td><code><%= @comparison_run.baseline_path %></code></td></tr>
+  <% if @comparison_run.baseline_ref.present? %>
+    <tr><th>Baseline Ref</th><td><code><%= @comparison_run.baseline_ref %></code></td></tr>
+  <% end %>
+  <tr><th>Candidate</th><td><%= @comparison_run.candidate_label %></td></tr>
+  <tr><th>Candidate Path</th><td><code><%= @comparison_run.candidate_path %></code></td></tr>
+  <% if @comparison_run.candidate_ref.present? %>
+    <tr><th>Candidate Ref</th><td><code><%= @comparison_run.candidate_ref %></code></td></tr>
+  <% end %>
+  <tr><th>Status</th><td><%= @comparison_run.status %></td></tr>
+  <tr><th>Result</th><td><strong><%= @comparison_run.passed? ? "PASS" : "FAIL" %></strong></td></tr>
+  <tr><th>Failures</th><td><%= @comparison_run.failure_count %></td></tr>
+  <tr><th>Created At</th><td><%= @comparison_run.created_at.strftime('%Y-%m-%d %H:%M:%S') %></td></tr>
+  <% if @comparison_run.notes.present? %>
+    <tr><th>Notes</th><td><pre><%= @comparison_run.notes %></pre></td></tr>
+  <% end %>
+  <% if @comparison_run.environment_metadata.present? %>
+    <tr>
+      <th>Environment</th>
+      <td>
+        <% @comparison_run.environment_metadata.each do |key, value| %>
+          <div><code><%= key %></code>: <%= value %></div>
+        <% end %>
+      </td>
+    </tr>
+  <% end %>
+</table>
+
+<% @statistics_by_metric.each do |metric, rows| %>
+  <h2><%= metric.capitalize %> Statistics</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Handler</th>
+        <th>Per Page</th>
+        <th>Baseline Q1</th>
+        <th>Baseline Median</th>
+        <th>Baseline Q3</th>
+        <th>Candidate Q1</th>
+        <th>Candidate Median</th>
+        <th>Candidate Q3</th>
+        <th>Ratio</th>
+        <th>Result</th>
+        <th>Failure Reason</th>
+      </tr>
+    </thead>
+    <tbody>
+      <% rows.each do |stat| %>
+        <tr<%= stat.passed? ? "" : ' style="background:#fff0f0"'.html_safe %>>
+          <td><%= stat.handler_type %></td>
+          <td><%= stat.per_page %></td>
+          <td><%= stat.baseline_q1&.round(4) %></td>
+          <td><%= stat.baseline_median&.round(4) %></td>
+          <td><%= stat.baseline_q3&.round(4) %></td>
+          <td><%= stat.candidate_q1&.round(4) %></td>
+          <td><%= stat.candidate_median&.round(4) %></td>
+          <td><%= stat.candidate_q3&.round(4) %></td>
+          <td><%= stat.ratio&.round(3) %></td>
+          <td><%= stat.passed? ? "PASS" : "FAIL" %></td>
+          <td><%= stat.failure_reason %></td>
+        </tr>
+      <% end %>
+    </tbody>
+  </table>
+<% end %>

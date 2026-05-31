@@ -46,6 +46,39 @@ namespace :article do
     raise "Failed to generate results summary" unless ok
   end
 
+  desc "Snapshot the canonical benchmark outputs into tmp/repro_runs/<name_or_timestamp>. Usage: rails 'article:snapshot_rerun[name]'"
+  task :snapshot_rerun, [:name_or_dir] => :environment do |_t, args|
+    require "rbconfig"
+
+    script = Rails.root.join("script", "article", "rerun_reproducibility.rb")
+    raise "Missing script: #{script}" unless script.exist?
+
+    command = [RbConfig.ruby.to_s, script.to_s, "snapshot"]
+    name_or_dir = args[:name_or_dir].to_s
+    command << name_or_dir unless name_or_dir.empty?
+
+    ok = system(*command)
+    raise "Failed to snapshot rerun outputs" unless ok
+  end
+
+  desc "Compare a saved rerun snapshot against the current docs outputs. Usage: rails 'article:compare_rerun[/abs/or/rel/baseline_dir,/optional/candidate_dir]'"
+  task :compare_rerun, %i[baseline_dir candidate_dir] => :environment do |_t, args|
+    require "rbconfig"
+
+    baseline_dir = args[:baseline_dir].to_s
+    raise "baseline_dir is required" if baseline_dir.empty?
+
+    script = Rails.root.join("script", "article", "rerun_reproducibility.rb")
+    raise "Missing script: #{script}" unless script.exist?
+
+    command = [RbConfig.ruby.to_s, script.to_s, "compare", baseline_dir]
+    candidate_dir = args[:candidate_dir].to_s
+    command << candidate_dir unless candidate_dir.empty?
+
+    ok = system(*command)
+    raise "Rerun reproducibility comparison failed" unless ok
+  end
+
   desc "Generate static SVG figures for the article from docs/data/*.csv"
   # Usage:
   #   bundle exec rails "article:generate_figures[/path/to/durations.csv,/path/to/memory.csv,/path/to/out_dir]"
@@ -86,4 +119,3 @@ namespace :article do
     end
   end
 end
-

@@ -1,0 +1,37 @@
+<h1>Rerun Comparison Runs</h1>
+
+<div style="display:flex; gap: 12px; align-items:center;">
+  <%= link_to 'Tasks', tasks_path, class: 'btn' %>
+  <div style="flex:1"></div>
+</div>
+
+<% if @comparison_runs.empty? %>
+  <p>No comparison runs recorded yet. Use <code>ruby script/article/rerun_reproducibility.rb compare BASELINE_DIR</code> from the benchmark_ui container to run a comparison.</p>
+<% else %>
+  <table>
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Baseline</th>
+        <th>Candidate</th>
+        <th>Status</th>
+        <th>Result</th>
+        <th>Failures</th>
+        <th>Created At</th>
+      </tr>
+    </thead>
+    <tbody>
+      <% @comparison_runs.each do |run| %>
+        <tr>
+          <td><%= link_to run.id, comparison_run_path(run) %></td>
+          <td><%= run.baseline_label %></td>
+          <td><%= run.candidate_label %></td>
+          <td><%= run.status %></td>
+          <td><%= run.passed? ? "PASS" : "FAIL" %></td>
+          <td><%= run.failure_count %></td>
+          <td><%= run.created_at.strftime('%Y-%m-%d %H:%M:%S') %></td>
+        </tr>
+      <% end %>
+    </tbody>
+  </table>
+<% end %>
