@@ -5,9 +5,16 @@ module RerunReproducibility
     ORDER_CHECK_WORKLOADS = [1000, 10_000, 100_000].freeze
     DURATION_MIN_PER_PAGE = 100
     DURATION_RATIO_RANGE = (0.5..2.0)
+    # Node.js shows documented high scheduling variance at sub-1000 workloads
+    # (wide IQR in the article). A looser band applies there.
+    NODE_DURATION_RATIO_RANGE_SMALL = (0.25..4.0)
+    NODE_DURATION_SMALL_THRESHOLD = 1000
     MEMORY_RATIO_RANGE = (0.8..1.25)
     ORDER_OF_MAGNITUDE_LIMIT = 10.0
     PREFERRED_HANDLERS = %w[go ruby python node].freeze
+    # Ruby and Python have overlapping IQRs at large workloads and are treated
+    # as an unordered pair for the ordering check.
+    UNORDERED_PAIRS = [%w[ruby python].freeze].freeze
 
     CANONICAL_FILES = {
       "durations_selected.csv" => %w[docs data durations_selected.csv],
@@ -162,9 +169,14 @@ module RerunReproducibility
       else
         value_ratio = ratio(candidate[:median], baseline[:median])
         if metric == "duration" && workload >= DURATION_MIN_PER_PAGE
-          unless DURATION_RATIO_RANGE.cover?(value_ratio)
+          band = if handler == "node" && workload < NODE_DURATION_SMALL_THRESHOLD
+            NODE_DURATION_RATIO_RANGE_SMALL
+          else
+            DURATION_RATIO_RANGE
+          end
+          unless band.cover?(value_ratio)
             passed = false
-            failure_reason = format("median ratio %.3f outside [%.2f, %.2f]", value_ratio, DURATION_RATIO_RANGE.begin, DURATION_RATIO_RANGE.end)
+            failure_reason = format("median ratio %.3f outside [%.2f, %.2f]", value_ratio, band.begin, band.end)
           end
         elsif metric == "memory" && workload >= DURATION_MIN_PER_PAGE
           unless MEMORY_RATIO_RANGE.cover?(value_ratio)
@@ -211,11 +223,27 @@ module RerunReproducibility
         baseline_order = ordered_handlers_for(baseline_handlers).sort_by { |handler| baseline_handlers.fetch(handler).fetch(:median) }
         candidate_order = ordered_handlers_for(candidate_handlers).sort_by { |handler| candidate_handlers.fetch(handler).fetch(:median) }
         next if baseline_order == candidate_order
+        next if ordering_differs_only_in_unordered_pairs?(baseline_order, candidate_order)
 
         rows.select { |row| row[:metric] == "duration" && row[:per_page] == workload }.each do |row|
           row[:passed] = false
           ordering_reason = "ordering mismatch baseline=#{baseline_order.join('>')} candidate=#{candidate_order.join('>')}"
           row[:failure_reason] = [row[:failure_reason], ordering_reason].compact.join("; ")
+        end
+      end
+    end
+
+    def ordering_differs_only_in_unordered_pairs?(baseline_order, candidate_order)
+      return false if baseline_order.length != candidate_order.length
+
+      baseline_order.each_with_index.all? do |handler, i|
+        candidate_handler = candidate_order[i]
+        next true if handler == candidate_handler
+
+        UNORDERED_PAIRS.any? do |pair|
+          pair.include?(handler) && pair.include?(candidate_handler) &&
+            baseline_order.filter_map.with_index { |h, j| j if pair.include?(h) } ==
+            candidate_order.filter_map.with_index { |h, j| j if pair.include?(h) }.sort
         end
       end
     end
