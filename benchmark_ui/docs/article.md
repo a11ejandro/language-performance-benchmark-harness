@@ -62,7 +62,7 @@ For each page size (`per_page`), workers compute fundamental statistics (min, ma
 - Repetitions: each (language, per_page) pair executed N times (N configurable; default 30) for variance estimation.
 
 ### 3.5 Metrics
-- Duration: Wall-clock time per task, measured inside the worker from job start to completion.
+- Duration: Wall-clock time for the statistical computation phase only, measured inside the worker. The timer starts after the data window has been fetched from PostgreSQL and stops when `calculateStatistics` returns. Redis dequeue time, SQL fetch time, and result write time are all excluded. All four workers implement timing identically in this respect.
 - Memory: Peak OS-level RSS (resident set size) sampled at 10 ms intervals during job execution, using the same methodology across all four runtimes:
 	- **Linux**: `/proc/self/statm` (resident pages × page size), falling back to `VmRSS` from `/proc/self/status`.
 	- **macOS**: `ps -o rss=` for the worker process.
@@ -325,7 +325,7 @@ The smallest workloads (`per_page < 100`) are excluded from the numeric duration
 
 **Memory measurement is process-level, not job-marginal.** All four workers measure peak RSS using the same `/proc/self/statm` → `/proc/self/status` → `ps -o rss=` approach sampled at 10 ms intervals during job execution (see Section 3.5). The measurement captures the high-water mark of the process working set during the job, not the incremental allocation cost of that job alone. Ruby's baseline Sidekiq process consumes ~120 MB before any work is done; Go's baseline is ~8 MB. Differences in memory readings at small workloads largely reflect runtime baseline overhead rather than algorithmic allocation. This is the intended measurement for capacity planning purposes, but it does not isolate per-job heap allocation.
 
-**Duration includes queue round-trip time.** Job duration is measured from inside the worker and includes the time to dequeue the job from Redis. At small workloads (`per_page < 100`), where computation completes in microseconds, the queue latency contribution is proportionally larger. Duration comparisons at small `per_page` are therefore less informative about pure computation performance.
+**Duration measures computation, not end-to-end job latency.** The timer runs only over the `calculateStatistics` call — Redis dequeue, SQL fetch, and result write are excluded. This is the intended scope: the benchmark measures computational throughput rather than full pipeline latency. End-to-end job latency would include queue wait time and is not captured.
 
 **No warm-up discard.** The first job in each handler's batch may incur one-time overhead (connection establishment, initial memory allocation). With `RUNS=30` and serial scheduling, the first-job effect is diluted and does not materially affect the median, but it contributes to the q1 spread at small workloads.
 
