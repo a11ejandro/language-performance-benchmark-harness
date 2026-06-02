@@ -160,7 +160,7 @@ Note: quartiles are computed from the sorted per-(task, handler) series using li
 
 ### 9.1 Duration: Go leads at all scales
 
-Go is the fastest handler at every `per_page` value by a consistent margin. At `per_page=100000`, Go's median duration is 7.87 ms, compared to 22.6 ms for Ruby, 23.8 ms for Python, and 58.2 ms for Node — ratios of approximately 2.9×, 3.0×, and 7.4× respectively. The advantage is not an artifact of a single workload: it holds from `per_page=100` through `per_page=100000`, and the rank ordering Go < Ruby ≈ Python < Node is stable across all 30 runs at those sizes.
+Go is the fastest handler at every `per_page` value by a consistent margin. At `per_page=100000`, Go's median duration is 7.87 ms, compared to 22.6 ms for Ruby, 23.8 ms for Python, and 58.2 ms for Node — ratios of approximately 2.9×, 3.0×, and 7.4× respectively. The advantage is not an artifact of a single workload: it holds from `per_page=100` through `per_page=100000`, and the rank ordering Go < Ruby ~ Python < Node is stable across all 30 runs at those sizes.
 
 The primary explanation is Go's compiled execution model. The benchmark tasks consist of a SQL fetch followed by iterative statistics computation over an in-memory slice. In Go, both operations execute as native machine instructions with no interpreter overhead and minimal per-iteration allocation. Ruby and Python execute the same logic through an interpreter (MRI / CPython), which imposes consistent per-operation overhead. At `per_page=1000`, Ruby (0.173 ms) and Python (0.156 ms) are nearly identical — unsurprising given the same algorithmic structure and similar interpreter overheads.
 
@@ -321,7 +321,7 @@ The smallest workloads (`per_page < 100`) are excluded from the numeric duration
 
 ## 11. Limitations & Threats to Validity
 
-**Single-machine scope.** All results were collected on one Apple M2 Pro under macOS in Docker containers. Performance ratios may differ on Linux bare-metal, cloud instances, or machines with different memory bandwidth and CPU characteristics. The rank ordering Go < Ruby ≈ Python < Node is expected to be stable across hardware, but the absolute multiples may not transfer directly.
+**Single-machine scope.** All results were collected on one Apple M2 Pro under macOS in Docker containers. Performance ratios may differ on Linux bare-metal, cloud instances, or machines with different memory bandwidth and CPU characteristics. The rank ordering Go < Ruby ~ Python < Node is expected to be stable across hardware, but the absolute multiples may not transfer directly.
 
 **Memory measurement is process-level, not job-marginal.** All four workers measure peak RSS using the same `/proc/self/statm` → `/proc/self/status` → `ps -o rss=` approach sampled at 10 ms intervals during job execution (see Section 3.5). The measurement captures the high-water mark of the process working set during the job, not the incremental allocation cost of that job alone. Ruby's baseline Sidekiq process consumes ~120 MB before any work is done; Go's baseline is ~8 MB. Differences in memory readings at small workloads largely reflect runtime baseline overhead rather than algorithmic allocation. This is the intended measurement for capacity planning purposes, but it does not isolate per-job heap allocation.
 
