@@ -63,12 +63,10 @@ For each page size (`per_page`), workers compute fundamental statistics (min, ma
 
 ### 3.5 Metrics
 - Duration: Wall-clock time per task, measured inside the worker from job start to completion.
-- Memory: Process-level memory reported by each runtime's native instrumentation:
-	- **Ruby**: RSS reported via `/proc/self/status` (`VmRSS`) inside the Sidekiq worker process.
-	- **Go**: `runtime.ReadMemStats().Sys` — total memory obtained from the OS by the Go runtime.
-	- **Node.js**: `process.memoryUsage().rss` — resident set size as reported by the OS.
-	- **Python**: `psutil.Process().memory_info().rss` — resident set size from the OS.
-	- All four capture OS-level RSS for the worker process at job completion. Because workers are long-running services sharing process memory across jobs, the values reflect the high-water mark of working-set memory for the process at the time of measurement rather than the marginal cost of one job in isolation. Comparisons across runtimes should be interpreted in this context (see Section 11).
+- Memory: Peak OS-level RSS (resident set size) sampled at 10 ms intervals during job execution, using the same methodology across all four runtimes:
+	- **Linux**: `/proc/self/statm` (resident pages × page size), falling back to `VmRSS` from `/proc/self/status`.
+	- **macOS**: `ps -o rss=` for the worker process.
+	- All four workers implement this same polling approach — a background sampler thread/goroutine reads RSS every 10 ms while the job runs and records the peak observed value. Because workers are long-running services sharing process memory across jobs, the peak RSS reflects the high-water mark of the process working set during that job, not the marginal allocation of a single job in isolation. Comparisons across runtimes should be interpreted in this context (see Section 11).
 - Distribution statistics: Captured post-run for plotting (min, q1, median, q3, max).
 
 ### 3.6 Fairness Controls
@@ -325,7 +323,7 @@ The smallest workloads (`per_page < 100`) are excluded from the numeric duration
 
 **Single-machine scope.** All results were collected on one Apple M2 Pro under macOS in Docker containers. Performance ratios may differ on Linux bare-metal, cloud instances, or machines with different memory bandwidth and CPU characteristics. The rank ordering Go < Ruby ≈ Python < Node is expected to be stable across hardware, but the absolute multiples may not transfer directly.
 
-**Memory measurement is process-level, not job-marginal.** All four runtimes report OS-level RSS for the long-running worker process, not the incremental memory cost of a single job. Ruby's baseline Sidekiq process consumes ~120 MB before any work is done; Go's baseline is ~8 MB. Differences in memory readings at small workloads largely reflect runtime baseline overhead rather than algorithmic allocation. This is documented in Section 3.5 and is the intended measurement for capacity planning purposes, but it does not isolate per-job heap allocation.
+**Memory measurement is process-level, not job-marginal.** All four workers measure peak RSS using the same `/proc/self/statm` → `/proc/self/status` → `ps -o rss=` approach sampled at 10 ms intervals during job execution (see Section 3.5). The measurement captures the high-water mark of the process working set during the job, not the incremental allocation cost of that job alone. Ruby's baseline Sidekiq process consumes ~120 MB before any work is done; Go's baseline is ~8 MB. Differences in memory readings at small workloads largely reflect runtime baseline overhead rather than algorithmic allocation. This is the intended measurement for capacity planning purposes, but it does not isolate per-job heap allocation.
 
 **Duration includes queue round-trip time.** Job duration is measured from inside the worker and includes the time to dequeue the job from Redis. At small workloads (`per_page < 100`), where computation completes in microseconds, the queue latency contribution is proportionally larger. Duration comparisons at small `per_page` are therefore less informative about pure computation performance.
 
