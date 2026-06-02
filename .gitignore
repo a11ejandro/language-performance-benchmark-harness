@@ -12,7 +12,6 @@
 !/README.md
 !/LICENSE
 !/CITATION.cff
-/IMPROVEMENT_PLAN.md
 
 # Keep the actual project directories trackable.
 !/benchmark_ui/
