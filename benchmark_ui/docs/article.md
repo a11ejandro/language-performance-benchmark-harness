@@ -118,9 +118,9 @@ D3 boxplot rendering for each handler type across `per_page` values (duration an
 
 ## 7. Statistical Treatment
 - Central tendency: Median is the primary comparison metric, preferred over mean for resilience to right-skewed distributions that arise from occasional GC pauses, scheduler delays, and Redis round-trip jitter.
-- Spread: IQR (q1–q3) reported alongside each median. For `per_page >= 1000`, the relative IQR width is below 5% for Go, Ruby, and Python, which is sufficient to support the ordinal ranking claims made in Section 9 without formal significance testing. Node.js shows materially wider spread at intermediate workloads, which is discussed explicitly in Section 9.
+- Spread: IQR (q1–q3) reported alongside each median. Rather than applying formal significance tests, we assess separation by checking whether IQRs overlap between runtime pairs at each workload. At `per_page >= 1000`, the IQRs of every pairwise comparison are non-overlapping — with one exception: Ruby and Python overlap at `per_page=10000` and `per_page=100000`, consistent with the conclusion in Section 9 that they perform comparably at scale. All other pairs have a clear gap between one runtime's q3 and the next runtime's q1, supporting the rank ordering claims without ambiguity.
 - Outlier handling: No trimming; whiskers in the boxplot figures show the full observed range per (handler, `per_page`).
-- Confidence intervals: Not reported. The narrow IQRs at larger workloads and the consistent rank ordering across all 30 runs support the conclusions without them.
+- Confidence intervals: Not reported. IQR non-overlap at the relevant workloads makes the ordering unambiguous for all comparisons except Ruby vs Python, which are treated as comparable.
 
 ## 8. Results
 
@@ -174,7 +174,7 @@ This makes Node a poor fit for CPU-bound background tasks where latency consiste
 
 ### 9.3 Ruby and Python: comparable at scale
 
-Ruby and Python converge at large workloads: at `per_page=100000`, Ruby median is 22.6 ms and Python is 23.8 ms — a 5% difference well within run-to-run variation. Both are constrained by their interpreter overhead rather than by the statistical algorithm itself. This convergence is expected: with `concurrency=1` for both runtimes, the Python GIL is not a factor, and the hand-rolled statistics loops in both languages have equivalent algorithmic complexity.
+Ruby and Python converge at large workloads: at `per_page=100000`, Ruby median is 22.6 ms and Python is 23.8 ms — a 5% difference — and their IQRs overlap ([0.022116, 0.024303] vs [0.020015, 0.026228]), meaning the distributions cannot be separated by IQR alone. This is the one pair in this study where no ordering claim is warranted; they should be treated as equivalent for practical purposes at this scale.
 
 At small workloads (`per_page < 50`), the ordering is noisier — duration is dominated by queue round-trip time and DB query overhead rather than computation — and differences between runtimes at these sizes should not be over-interpreted.
 
