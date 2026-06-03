@@ -11,7 +11,7 @@ tags:
   - reproducibility
 authors:
   - name: Oleksandr Potrakhov
-    orcid: 0000-0000-0000-0000
+    orcid: 0009-0008-5757-962X
     affiliation: 1
 affiliations:
   - name: Independent Researcher
