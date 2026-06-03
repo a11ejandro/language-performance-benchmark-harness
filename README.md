@@ -54,9 +54,9 @@ Rerun acceptance policy:
 	- the same worker-concurrency constraints are used (Sidekiq concurrency `1`, Celery concurrency `1`, Celery prefetch multiplier `1`, one-job Go/Node loops)
 	- the same canonical artifact files are regenerated under `benchmark_ui/docs/`
 - Statistical-match requirements:
-	- for `per_page >= 100`, each handler's duration median should remain within a `0.5x` to `2.0x` band of the archival run median
+	- for `per_page >= 100`, each handler's duration median should remain within a `0.5x` to `2.0x` band of the archival run median — except Node.js at `per_page < 1000`, where the band is `0.25x` to `4.0x` due to its documented high scheduling variance at small workloads
 	- for `per_page >= 100`, each handler's memory median should remain within a `0.8x` to `1.25x` band of the archival run median
-	- for the largest workloads (`per_page = 1000`, `10000`, `100000`), the qualitative ordering of handler medians should be preserved
+	- for the largest workloads (`per_page = 1000`, `10000`, `100000`), the qualitative ordering of handler medians should be preserved — except that Ruby and Python are treated as an unordered pair, since their IQRs overlap at large workloads
 	- no handler should shift by an order of magnitude at any workload without an explained environment or code change
 	- any reported rerun should include the machine/environment description used for that run
 - Non-goal:

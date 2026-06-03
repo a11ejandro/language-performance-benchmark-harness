@@ -12,6 +12,11 @@
 !/README.md
 !/LICENSE
 !/CITATION.cff
+!/CONTRIBUTING.md
+!/paper.md
+!/paper.bib
+!/CHANGELOG.md
+!/RELEASE_NOTES.md
 
 # Keep the actual project directories trackable.
 !/benchmark_ui/
