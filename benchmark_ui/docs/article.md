@@ -1,12 +1,18 @@
 # A Reproducible Runtime Performance Benchmark Across Ruby, Go, Python, and Node.js (via Background Job Execution)
 
 ## Abstract
-We present an empirical comparison of four contemporary ecosystems for background job processing and computation-heavy tasks: Ruby on Rails with Sidekiq, Go with a Sidekiq-compatible Redis consumer, Python with Celery (with a small Flask enqueue bridge), and Node.js with a Sidekiq-compatible Redis consumer. Using a unified PostgreSQL schema, identical data structures (arrays / hashes / objects) and minimized framework abstractions inside workers, we measure task duration distributions, memory usage, and throughput across varying dataset slice sizes (`per_page`). We contribute: (1) a reproducible multi-language benchmark harness; (2) standardized wide and long-format CSV exports for raw result series; (3) D3-based visualizations of distributional statistics; and (4) guidance on technology selection under different latency / resource profiles. Here, reproducibility means deterministic data generation, fixed orchestration, and a documented environment; repeated benchmark runs on a real machine are expected to yield statistically similar measurements rather than byte-identical exported artifacts. All code and data are open-source for verification and extension.
+We present an empirical comparison of four contemporary ecosystems for background job processing and computation-heavy tasks: Ruby on Rails with Sidekiq, Go with a Sidekiq-compatible Redis consumer, Python with Celery (with a small Flask enqueue bridge), and Node.js with a Sidekiq-compatible Redis consumer. Using a unified PostgreSQL schema, identical data structures (arrays / hashes / objects) and minimized framework abstractions inside workers, we measure task duration distributions, memory usage, and throughput across varying dataset slice sizes (`per_page`). All measurements were collected on a single Apple M2 Pro host under macOS in Docker containers. We contribute: (1) a reproducible multi-language benchmark harness; (2) standardized wide and long-format CSV exports for raw result series; (3) D3-based visualizations of distributional statistics; and (4) guidance on technology selection under different latency / resource profiles. Here, reproducibility means deterministic data generation, fixed orchestration, and a documented environment; repeated benchmark runs on a real machine are expected to yield statistically similar measurements rather than byte-identical exported artifacts. All code and data are open-source for verification and extension.
 
 Artifact availability: https://github.com/a11ejandro/language-performance-benchmark-harness (includes Docker Compose definitions, benchmark orchestration tasks, the generated CSV/SVG artifacts under `benchmark_ui/docs/`, and the benchmark UI plus all worker implementations in one archival repository snapshot).
 
 ## 1. Introduction
 Background job processing underpins web application responsiveness and scalability. While prior informal comparisons focused on small subsets of languages, engineering teams today routinely evaluate multiple ecosystems when optimizing computational workloads (e.g., aggregation, statistical transforms, ETL). This investigation delivers a controlled, reproducible cross-language study of four widely adopted stacks using current runtime versions. We emphasize: (a) methodological fairness (shared schema, identical logic paths); (b) isolation of worker-level performance by minimizing ORMs and higher abstractions; and (c) transparent raw data availability via CSV exports.
+
+This investigation addresses the following research questions:
+
+- **RQ1:** How do Go, Ruby, Python, and Node.js compare in median computation duration for background statistical jobs across a range of dataset sizes (1–100,000 rows)?
+- **RQ2:** Is the rank ordering of runtimes by duration stable across workload sizes and independent reruns, or does it depend on scale?
+- **RQ3:** How do the four runtimes differ in process-level memory usage (peak RSS) during job execution, and how does that usage scale with dataset size?
 
 ## 2. Related Work
 This investigation sits at the intersection of (a) background job frameworks and their queue semantics and (b) language/runtime concurrency models. On the Ruby side, Sidekiq is a widely-used Redis-backed job processor that runs many jobs concurrently using threads in a single process [1], and its public documentation specifies the on-wire Redis job payload shape used by Sidekiq-compatible consumers [2]. Rails’ Active Job provides a standardized interface over multiple queue backends, including Sidekiq, and frames job execution as work performed off the request/response thread [3].
@@ -118,9 +124,21 @@ D3 boxplot rendering for each handler type across `per_page` values (duration an
 
 ## 7. Statistical Treatment
 - Central tendency: Median is the primary comparison metric, preferred over mean for resilience to right-skewed distributions that arise from occasional GC pauses, scheduler delays, and Redis round-trip jitter.
-- Spread: IQR (q1–q3) reported alongside each median. Rather than applying formal significance tests, we assess separation by checking whether IQRs overlap between runtime pairs at each workload. At `per_page >= 1000`, the IQRs of every pairwise comparison are non-overlapping — with one exception: Ruby and Python overlap at `per_page=10000` and `per_page=100000`, consistent with the conclusion in Section 9 that they perform comparably at scale. All other pairs have a clear gap between one runtime's q3 and the next runtime's q1, supporting the rank ordering claims without ambiguity.
+- Spread: IQR (q1–q3) reported alongside each median. Rather than applying formal significance tests, we assess separation by checking whether IQRs overlap between runtime pairs at each workload. The table below shows pairwise IQR overlap at the three ordering-check workloads. A "gap" means the faster runtime's q3 is strictly below the slower runtime's q1; "overlap" means the intervals intersect.
+
+| Pair | per\_page=1,000 | per\_page=10,000 | per\_page=100,000 |
+|---|---|---|---|
+| Go vs Python | gap | gap | gap |
+| Go vs Ruby | gap | gap | gap |
+| Go vs Node | gap | gap | gap |
+| Python vs Ruby | gap (5 µs margin) | gap | **overlap** |
+| Python vs Node | gap | gap | gap |
+| Ruby vs Node | gap | **overlap** | gap |
+
+At `per_page=1,000` all six pairs are non-overlapping, making the full ordering Go < Python < Ruby < Node unambiguous. At `per_page=10,000`, Ruby's IQR upper bound (2.924 ms) exceeds Node's lower bound (2.346 ms), but Ruby's median (2.182 ms) remains well below Node's median (3.334 ms); the ordering is still supported by median. At `per_page=100,000`, Python and Ruby IQRs fully overlap ([20.0, 26.2] ms vs [22.1, 24.3] ms), meaning no ordering claim can be made for that pair at that scale. All other pairs retain a clear IQR gap.
+
 - Outlier handling: No trimming; whiskers in the boxplot figures show the full observed range per (handler, `per_page`).
-- Confidence intervals: Not reported. IQR non-overlap at the relevant workloads makes the ordering unambiguous for all comparisons except Ruby vs Python, which are treated as comparable.
+- Confidence intervals: Not reported. IQR non-overlap at the relevant workloads makes the ordering unambiguous for all comparisons except Ruby vs Python at `per_page=100,000`, which are treated as comparable (see Section 9.3).
 
 ## 8. Results
 
@@ -341,17 +359,17 @@ Fresh-clone rerun validation (2026-06-02):
 We supply a transparent multi-language benchmark harness enabling apples-to-apples comparisons for background computational tasks. Future directions: Rust implementation; distributed multi-node scaling; inclusion of JVM-based (e.g., Kotlin + Spring Batch) and Elixir (BEAM) ecosystems; power efficiency metrics.
 
 ## 13. References
-1. Sidekiq. “Sidekiq” (README / project overview). https://github.com/sidekiq/sidekiq (accessed 2026-05-31).
-2. Sidekiq Wiki. “Job Format”. https://github.com/sidekiq/sidekiq/wiki/Job-Format (accessed 2026-05-31).
-3. Ruby on Rails Guides. “Active Job Basics”. https://guides.rubyonrails.org/active_job_basics.html (accessed 2026-05-31).
-4. Celery Documentation. “Celery - Distributed Task Queue”. https://docs.celeryq.dev/en/stable/ (accessed 2026-05-31).
-5. Flask Documentation. “Welcome to Flask”. https://flask.palletsprojects.com/ (accessed 2026-05-31).
-6. Redis Documentation. “BRPOP”. https://redis.io/commands/brpop/ (accessed 2026-05-31).
-7. Node.js Documentation. “The Node.js Event Loop”. https://nodejs.org/en/learn/asynchronous-work/event-loop-timers-and-nexttick (accessed 2026-05-31).
-8. Python Documentation. “Glossary: global interpreter lock”. https://docs.python.org/3/glossary.html#term-global-interpreter-lock (accessed 2026-05-31).
-9. Go Documentation. “Documentation” (entry point), and linked performance topics such as “A Guide to the Go Garbage Collector”. https://go.dev/doc/ (accessed 2026-05-31).
-10. PostgreSQL Documentation. “PostgreSQL Documentation (current)”. https://www.postgresql.org/docs/current/ (accessed 2026-05-31).
-11. Docker Documentation. “Docker Compose”. https://docs.docker.com/compose/ (accessed 2026-05-31).
+1. Perham, M. *Sidekiq: Simple, efficient background processing for Ruby*. GitHub, 2012–present. https://github.com/sidekiq/sidekiq (accessed 2026-05-31).
+2. Sidekiq Contributors. *Sidekiq Wiki: Job Format*. GitHub, 2024. https://github.com/sidekiq/sidekiq/wiki/Job-Format (accessed 2026-05-31).
+3. Ruby on Rails Contributors. *Active Job Basics*. Rails Guides, 2024. https://guides.rubyonrails.org/active_job_basics.html (accessed 2026-05-31).
+4. Solem, A., and contributors. *Celery: Distributed Task Queue* (version 5.x). Celery Project, 2024. https://docs.celeryq.dev/en/stable/ (accessed 2026-05-31).
+5. Ronacher, A., and Pallets contributors. *Flask: The Pallets Projects* (version 3.x). Pallets, 2024. https://flask.palletsprojects.com/ (accessed 2026-05-31).
+6. Redis Ltd. *BRPOP — Redis Commands*. Redis Documentation, 2024. https://redis.io/commands/brpop/ (accessed 2026-05-31).
+7. OpenJS Foundation. *The Node.js Event Loop, Timers, and process.nextTick()*. Node.js Documentation, 2024. https://nodejs.org/en/learn/asynchronous-work/event-loop-timers-and-nexttick (accessed 2026-05-31).
+8. Python Software Foundation. *Glossary: global interpreter lock*. Python Documentation, 2024. https://docs.python.org/3/glossary.html#term-global-interpreter-lock (accessed 2026-05-31).
+9. The Go Authors. *Go Documentation* (entry point). Google, 2024. https://go.dev/doc/ (accessed 2026-05-31).
+10. The PostgreSQL Global Development Group. *PostgreSQL Documentation* (current). PostgreSQL, 2024. https://www.postgresql.org/docs/current/ (accessed 2026-05-31).
+11. Docker Inc. *Docker Compose*. Docker Documentation, 2024. https://docs.docker.com/compose/ (accessed 2026-05-31).
 
 ---
 *Repository artifact mapping:*
